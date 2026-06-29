@@ -767,120 +767,129 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# ── Floating Chat Widget ─────────────────────────────────────────────────────────
-if evaluated_goals:
-    _ai_ctx_chat = build_context(
-        name=active_display,
-        current_age=current_age,
-        current_savings=current_savings,
-        monthly_contribution=monthly_contribution,
-        allocation=allocation,
-        goals=evaluated_goals,
-        allocations=allocations if use_bucket else None,
-    )
+# ── Floating Chat Widget (always visible) ────────────────────────────────────────
+_has_goals = bool(evaluated_goals)
+_ai_ctx_chat = build_context(
+    name=active_display,
+    current_age=current_age,
+    current_savings=current_savings,
+    monthly_contribution=monthly_contribution,
+    allocation=allocation,
+    goals=evaluated_goals if _has_goals else [],
+    allocations=allocations if use_bucket else None,
+) if _has_goals else ""
 
-    # Toggle button (always visible bottom-right)
-    toggle_col = st.container()
-    with toggle_col:
-        st.markdown("<div class='chat-fab'>", unsafe_allow_html=True)
-        toggle_label = "✕ Close" if st.session_state.chat_open else "💬 AI Advisor"
-        if st.button(toggle_label, key="_chat_toggle", type="primary"):
-            st.session_state.chat_open = not st.session_state.chat_open
-            st.rerun()
-        st.markdown("</div>", unsafe_allow_html=True)
-    toggle_col.float(
-        "bottom: 24px; right: 24px; z-index: 1000;"
-    )
+# Toggle button — always shown, disabled until goals are active
+toggle_col = st.container()
+with toggle_col:
+    toggle_label = "✕ Close" if st.session_state.chat_open else "💬 AI Advisor"
+    if st.button(toggle_label, key="_chat_toggle", type="primary",
+                 disabled=not _has_goals):
+        st.session_state.chat_open = not st.session_state.chat_open
+        st.rerun()
+    if not _has_goals:
+        st.markdown(
+            "<p style='font-size:10px;opacity:0.45;text-align:center;margin-top:4px;white-space:nowrap'>"
+            "Enable a goal to start</p>",
+            unsafe_allow_html=True,
+        )
+toggle_col.float("bottom: 24px; right: 24px; z-index: 1000;")
 
-    # Chat panel (slides up above toggle button when open)
-    if st.session_state.chat_open:
-        chat_panel = st.container()
-        with chat_panel:
-            st.markdown(
-                "<div style='font-weight:600;font-size:14px;margin-bottom:10px;'>"
-                "💬 AI Advisor</div>",
-                unsafe_allow_html=True,
-            )
-
-            # Message history
-            msg_area = st.container(height=320)
-            with msg_area:
-                if not st.session_state.chat_messages:
-                    st.markdown(
-                        "<p style='font-size:12px;opacity:0.45;text-align:center;padding-top:60px'>"
-                        "Ask anything about your financial plan.<br>"
-                        "<em>e.g. \"Why is my retirement probability low?\"</em></p>",
-                        unsafe_allow_html=True,
-                    )
-                for msg in st.session_state.chat_messages:
-                    if msg["role"] == "user":
-                        st.markdown(
-                            f"<div class='chat-bubble-user'>🧑 {msg['content']}</div>",
-                            unsafe_allow_html=True,
-                        )
-                    else:
-                        st.markdown(
-                            f"<div class='chat-bubble-ai'>🤖 {msg['content']}</div>",
-                            unsafe_allow_html=True,
-                        )
-
-            user_input = st.chat_input("Ask about your plan…", key="_float_chat_input")
-
-            if user_input:
-                st.session_state.chat_messages.append({"role": "user", "content": user_input})
-                full_reply = ""
-                try:
-                    api_messages = [
-                        {"role": m["role"], "content": m["content"]}
-                        for m in st.session_state.chat_messages
-                    ]
-                    for chunk in stream_chat(_ai_ctx_chat, api_messages):
-                        full_reply += chunk
-                    st.session_state.chat_messages.append({"role": "assistant", "content": full_reply})
-                except ValueError as e:
-                    st.session_state.chat_messages.append({"role": "assistant", "content": f"Error: {e}"})
-                st.rerun()
-
-            if st.session_state.chat_messages:
-                if st.button("Clear", key="_float_clear"):
-                    st.session_state.chat_messages = []
-                    st.rerun()
-
-        chat_panel.float(
-            "bottom: 80px; right: 24px; width: 400px; z-index: 999; "
-            "background: var(--background-color); "
-            "border: 1px solid rgba(128,128,128,0.2); "
-            "border-radius: 16px; padding: 20px 18px 4px 18px; "
-            "box-shadow: 0 8px 32px rgba(0,0,0,0.25);"
+# Chat panel — only when open and goals exist
+if st.session_state.chat_open and _has_goals:
+    chat_panel = st.container()
+    with chat_panel:
+        st.markdown(
+            "<div style='font-weight:600;font-size:14px;margin-bottom:10px;'>"
+            "💬 AI Advisor</div>",
+            unsafe_allow_html=True,
         )
 
-    # JS: style the floating chat toggle button (CSS can't reach inside float containers)
-    import streamlit.components.v1 as components
-    components.html("""
-    <script>
-    function styleAdvisorBtn() {
-        const btns = window.parent.document.querySelectorAll('button');
-        btns.forEach(btn => {
-            const txt = btn.innerText.trim();
-            if (txt.includes('AI Advisor') || txt === '✕ Close') {
+        msg_area = st.container(height=320)
+        with msg_area:
+            if not st.session_state.chat_messages:
+                st.markdown(
+                    "<p style='font-size:12px;opacity:0.45;text-align:center;padding-top:60px'>"
+                    "Ask anything about your financial plan.<br>"
+                    "<em>e.g. \"Why is my retirement probability low?\"</em></p>",
+                    unsafe_allow_html=True,
+                )
+            for msg in st.session_state.chat_messages:
+                if msg["role"] == "user":
+                    st.markdown(
+                        f"<div class='chat-bubble-user'>🧑 {msg['content']}</div>",
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    st.markdown(
+                        f"<div class='chat-bubble-ai'>🤖 {msg['content']}</div>",
+                        unsafe_allow_html=True,
+                    )
+
+        user_input = st.chat_input("Ask about your plan…", key="_float_chat_input")
+
+        if user_input:
+            st.session_state.chat_messages.append({"role": "user", "content": user_input})
+            full_reply = ""
+            try:
+                api_messages = [
+                    {"role": m["role"], "content": m["content"]}
+                    for m in st.session_state.chat_messages
+                ]
+                for chunk in stream_chat(_ai_ctx_chat, api_messages):
+                    full_reply += chunk
+                st.session_state.chat_messages.append({"role": "assistant", "content": full_reply})
+            except ValueError as e:
+                st.session_state.chat_messages.append({"role": "assistant", "content": f"Error: {e}"})
+            st.rerun()
+
+        if st.session_state.chat_messages:
+            if st.button("Clear", key="_float_clear"):
+                st.session_state.chat_messages = []
+                st.rerun()
+
+    chat_panel.float(
+        "bottom: 80px; right: 24px; width: 400px; z-index: 999; "
+        "background: var(--background-color); "
+        "border: 1px solid rgba(128,128,128,0.2); "
+        "border-radius: 16px; padding: 20px 18px 4px 18px; "
+        "box-shadow: 0 8px 32px rgba(0,0,0,0.25);"
+    )
+
+# JS: style the floating chat toggle button
+import streamlit.components.v1 as components
+components.html("""
+<script>
+function styleAdvisorBtn() {
+    const btns = window.parent.document.querySelectorAll('button');
+    btns.forEach(btn => {
+        const txt = btn.innerText.trim();
+        if (txt.includes('AI Advisor') || txt === '✕ Close') {
+            if (btn.disabled) {
+                btn.style.backgroundColor = 'rgba(128,128,128,0.25)';
+                btn.style.borderColor = 'transparent';
+                btn.style.color = 'rgba(255,255,255,0.4)';
+                btn.style.boxShadow = 'none';
+            } else {
                 btn.style.backgroundColor = '#00c896';
                 btn.style.borderColor = '#00c896';
                 btn.style.color = '#ffffff';
-                btn.style.fontSize = '15px';
-                btn.style.fontWeight = '700';
-                btn.style.padding = '14px 28px';
-                btn.style.borderRadius = '50px';
-                btn.style.minWidth = '158px';
                 btn.style.boxShadow = '0 4px 20px rgba(0,200,150,0.45)';
-                btn.style.border = 'none';
             }
-        });
-    }
-    styleAdvisorBtn();
-    setTimeout(styleAdvisorBtn, 400);
-    setTimeout(styleAdvisorBtn, 1200);
-    new MutationObserver(styleAdvisorBtn).observe(
-        window.parent.document.body, { childList: true, subtree: true }
-    );
-    </script>
-    """, height=0)
+            btn.style.fontSize = '15px';
+            btn.style.fontWeight = '700';
+            btn.style.padding = '14px 28px';
+            btn.style.borderRadius = '50px';
+            btn.style.minWidth = '158px';
+            btn.style.border = 'none';
+        }
+    });
+}
+styleAdvisorBtn();
+setTimeout(styleAdvisorBtn, 400);
+setTimeout(styleAdvisorBtn, 1200);
+new MutationObserver(styleAdvisorBtn).observe(
+    window.parent.document.body, { childList: true, subtree: true }
+);
+</script>
+""", height=0)
