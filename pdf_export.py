@@ -64,6 +64,7 @@ def generate_pdf(
     goals: list,
     boost_amount: int,
     boost_probs: dict,
+    allocation_pcts: dict = None,
 ) -> bytes:
     pdf = PlanPDF()
     pdf.set_auto_page_break(auto=True, margin=15)
@@ -142,6 +143,40 @@ def generate_pdf(
         pdf.ln()
 
     pdf.ln(6)
+
+    # ── Goal funding split (bucket model only) ───────────────────────────────
+    if allocation_pcts:
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.set_text_color(*MID)
+        pdf.cell(0, 6, "GOAL FUNDING SPLIT", ln=True)
+        pdf.set_draw_color(*BLUE)
+        pdf.line(14, pdf.get_y(), 196, pdf.get_y())
+        pdf.ln(3)
+
+        col_w = 182 // max(len(goals), 1)
+        pdf.set_font("Helvetica", "", 9)
+        for g in goals:
+            pct = allocation_pcts.get(g.name, 0)
+            share = monthly_contribution * pct / 100
+            x = pdf.get_x()
+            y = pdf.get_y()
+            pdf.set_text_color(*MID)
+            pdf.cell(col_w, 5, g.name)
+        pdf.ln()
+        for g in goals:
+            pct = allocation_pcts.get(g.name, 0)
+            share = monthly_contribution * pct / 100
+            pdf.set_font("Helvetica", "B", 11)
+            pdf.set_text_color(*BLUE)
+            pdf.cell(col_w, 6, f"{pct}%")
+        pdf.ln()
+        for g in goals:
+            pct = allocation_pcts.get(g.name, 0)
+            share = monthly_contribution * pct / 100
+            pdf.set_font("Helvetica", "", 8)
+            pdf.set_text_color(*MID)
+            pdf.cell(col_w, 5, f"${share:,.0f}/mo")
+        pdf.ln(10)
 
     # ── Action plan ──────────────────────────────────────────────────────────
     pdf.set_font("Helvetica", "B", 9)

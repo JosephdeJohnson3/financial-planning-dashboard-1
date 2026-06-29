@@ -3,3 +3,5 @@ numpy>=1.26
 plotly>=5.20
 pandas>=2.0
 fpdf2>=2.7
+anthropic>=0.40
+streamlit-float>=0.3
